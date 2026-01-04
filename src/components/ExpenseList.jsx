@@ -1,61 +1,34 @@
-import { useState, useEffect } from 'react'
-import { getUserExpenses, getMonthlySummary, createExpense, updateExpense, deleteExpense } from '../lib/supabase'
+import { useEffect } from 'react'
+import { useExpenses, useTransactionTotals, useExpenseOperations, useExpenseUI } from '../hooks'
 import ExpenseForm from './ExpenseForm'
 import Pagination from './Pagination'
 import FilterBar from './FilterBar'
 
 export default function ExpenseList() {
-  const [expenses, setExpenses] = useState([])
-  const [summary, setSummary] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [view, setView] = useState('list') // 'list' or 'summary'
-  const [showForm, setShowForm] = useState(false)
-  const [editingExpense, setEditingExpense] = useState(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalExpenses, setTotalExpenses] = useState(0)
-  const [totalAmount, setTotalAmount] = useState(0)
-  const [filters, setFilters] = useState({
-    search: '',
-    category: null,
-    dateRange: 'all'
-  })
-  const [selectedExpenses, setSelectedExpenses] = useState(new Set())
-  const [groupBy, setGroupBy] = useState(null) // null, 'day', 'week', or 'month'
-  const pageSize = 10
+  // Custom hooks
+  const expensesHook = useExpenses()
+  const transactionHook = useTransactionTotals()
+  const operationsHook = useExpenseOperations(handleMutationSuccess)
+  const uiHook = useExpenseUI()
 
+  // Destructure for cleaner access
+  const { expenses, currentPage, totalPages, totalExpenses, totalAmount, filters, loading, handleFilterChange, handlePageChange, loadExpenses } = expensesHook
+  const { transactionTotals, loadMonthlyTransactionTotals, getThisMonthTotal } = transactionHook
+  const { editingExpense, selectedExpenses, showForm, handleSelectExpense, handleSelectAll, handleAddExpense, handleUpdateExpense, handleDeleteExpense, handleBulkDelete, handleEdit, handleCancelForm, setShowForm, setEditingExpense } = operationsHook
+  const { view, error, groupBy, setView, setGroupBy, groupExpenses } = uiHook
+
+  // Initialize data on mount
   useEffect(() => {
     loadExpenses()
-    loadMonthlySummary()
+    loadMonthlyTransactionTotals()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const loadExpenses = async (page = currentPage, currentFilters = filters) => {
-    try {
-      setLoading(true)
-      const result = await getUserExpenses(page, pageSize, currentFilters)
-      setExpenses(result.data)
-      setTotalPages(result.totalPages)
-      setTotalExpenses(result.total)
-      setTotalAmount(result.totalAmount)
-      setCurrentPage(page)
-      setSelectedExpenses(new Set())
-    } catch (err) {
-      setError(err.message)
-      console.error('Error loading expenses:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadMonthlySummary = async () => {
-    try {
-      const now = new Date()
-      const data = await getMonthlySummary(now.getFullYear(), now.getMonth() + 1)
-      setSummary(data)
-    } catch (err) {
-      console.error('Error loading summary:', err)
-    }
+  // Handle mutations that affect data
+  async function handleMutationSuccess() {
+    const newPage = 1
+    await loadExpenses(newPage, filters)
+    await loadMonthlyTransactionTotals()
   }
 
   const formatCurrency = (amount) => {
@@ -89,139 +62,16 @@ export default function ExpenseList() {
     return colors[category] || colors['Other']
   }
 
-  const handleSelectExpense = (expenseId) => {
-    const newSelected = new Set(selectedExpenses)
-    if (newSelected.has(expenseId)) {
-      newSelected.delete(expenseId)
-    } else {
-      newSelected.add(expenseId)
+  const getTransactionTypeStyle = (type) => {
+    const styles = {
+      'expense': { color: 'text-red-600', bg: 'bg-red-50' },
+      'income': { color: 'text-green-600', bg: 'bg-green-50' },
+      'savings': { color: 'text-blue-600', bg: 'bg-blue-50' }
     }
-    setSelectedExpenses(newSelected)
+    return styles[type] || styles['expense']
   }
 
-  const handleSelectAll = () => {
-    if (selectedExpenses.size === expenses.length && expenses.length > 0) {
-      setSelectedExpenses(new Set())
-    } else {
-      setSelectedExpenses(new Set(expenses.map(e => e.id)))
-    }
-  }
 
-  const handleBulkDelete = async () => {
-    if (selectedExpenses.size === 0) return
-    
-    if (!confirm(`Delete ${selectedExpenses.size} selected expense(s)?`)) {
-      return
-    }
-
-    try {
-      setLoading(true)
-      for (const expenseId of selectedExpenses) {
-        await deleteExpense(expenseId)
-      }
-      setSelectedExpenses(new Set())
-      await loadExpenses(1, filters)
-      await loadMonthlySummary()
-    } catch (err) {
-      console.error('Error bulk deleting expenses:', err)
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const groupExpenses = (expensesList) => {
-    if (!groupBy) return null
-
-    const grouped = {}
-    expensesList.forEach(expense => {
-      const date = new Date(expense.created_at)
-      let key
-
-      if (groupBy === 'day') {
-        key = date.toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' })
-      } else if (groupBy === 'week') {
-        const weekStart = new Date(date)
-        weekStart.setDate(date.getDate() - date.getDay())
-        const weekEnd = new Date(weekStart)
-        weekEnd.setDate(weekStart.getDate() + 6)
-        key = `Week of ${weekStart.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}`
-      } else if (groupBy === 'month') {
-        key = date.toLocaleDateString('en-GB', { year: 'numeric', month: 'long' })
-      }
-
-      if (!grouped[key]) grouped[key] = []
-      grouped[key].push(expense)
-    })
-
-    return grouped
-  }
-
-  const handleFilterChange = (newFilters) => {
-    setFilters(newFilters)
-    setCurrentPage(1)
-    loadExpenses(1, newFilters)
-  }
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page)
-    loadExpenses(page)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  const handleAddExpense = async (expenseData) => {
-    try {
-      await createExpense(expenseData)
-      setShowForm(false)
-      setCurrentPage(1)
-      await loadExpenses(1)
-      await loadMonthlySummary()
-    } catch (err) {
-      console.error('Error creating expense:', err)
-      throw err
-    }
-  }
-
-  const handleUpdateExpense = async (expenseData) => {
-    try {
-      await updateExpense(editingExpense.id, expenseData)
-      setEditingExpense(null)
-      setShowForm(false)
-      await loadExpenses(currentPage)
-      await loadMonthlySummary()
-    } catch (err) {
-      console.error('Error updating expense:', err)
-      throw err
-    }
-  }
-
-  const handleDeleteExpense = async (expenseId) => {
-    if (!confirm('Are you sure you want to delete this expense?')) {
-      return
-    }
-
-    try {
-      await deleteExpense(expenseId)
-      // If current page becomes empty after delete, go to previous page
-      const newPage = expenses.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage
-      setCurrentPage(newPage)
-      await loadExpenses(newPage)
-      await loadMonthlySummary()
-    } catch (err) {
-      console.error('Error deleting expense:', err)
-      setError(err.message)
-    }
-  }
-
-  const handleEdit = (expense) => {
-    setEditingExpense(expense)
-    setShowForm(true)
-  }
-
-  const handleCancelForm = () => {
-    setShowForm(false)
-    setEditingExpense(null)
-  }
 
   if (loading) {
     return (
@@ -244,23 +94,23 @@ export default function ExpenseList() {
     )
   }
 
-  const totalSummary = Object.values(summary).reduce((sum, amount) => sum + amount, 0)
+  const totalSummary = getThisMonthTotal(filters.transactionType)
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6 mb-4 sm:mb-8">
-        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-          <p className="text-xs sm:text-sm text-gray-600">Total Expenses</p>
-          <p className="text-2xl sm:text-3xl font-bold text-gray-900">{totalExpenses}</p>
+      {/* Stats Cards - Display in one row */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-8">
+        <div className="bg-white rounded-lg shadow p-2 sm:p-5">
+          <p className="text-xs sm:text-sm text-gray-600 line-clamp-1">Total Transactions</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">{totalExpenses}</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-          <p className="text-xs sm:text-sm text-gray-600">Total Amount</p>
-          <p className="text-2xl sm:text-3xl font-bold text-gray-900">{formatCurrency(totalAmount)}</p>
+        <div className="bg-white rounded-lg shadow p-2 sm:p-5">
+          <p className="text-xs sm:text-sm text-gray-600 line-clamp-1">Total Amount</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalAmount)}</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-          <p className="text-xs sm:text-sm text-gray-600">This Month</p>
-          <p className="text-2xl sm:text-3xl font-bold text-gray-900">{formatCurrency(totalSummary)}</p>
+        <div className="bg-white rounded-lg shadow p-2 sm:p-5">
+          <p className="text-xs sm:text-sm text-gray-600 line-clamp-1">This Month</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalSummary)}</p>
         </div>
       </div>
 
@@ -335,9 +185,9 @@ export default function ExpenseList() {
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
             }`}
           >
-            All Expenses
+            All
           </button>
-          <button
+        <button
             onClick={() => setView('summary')}
             className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-sm sm:text-base font-medium ${
               view === 'summary'
@@ -355,7 +205,7 @@ export default function ExpenseList() {
           }}
           className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm sm:text-base font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
-          {showForm ? 'Cancel' : '+ Add Expense'}
+          {showForm ? 'Cancel' : '+ Add'}
         </button>
       </div>
 
@@ -407,7 +257,9 @@ export default function ExpenseList() {
                                   <p className="font-medium text-gray-900">{expense.description}</p>
                                   <p className="text-xs text-gray-500 mt-1">{formatDate(expense.created_at)}</p>
                                 </div>
-                                <p className="text-lg font-semibold text-gray-900 ml-2">{formatCurrency(expense.amount)}</p>
+                                <p className={`text-lg font-semibold ml-2 ${getTransactionTypeStyle(expense.transaction_type).color}`}>
+                                  {formatCurrency(expense.amount)}
+                                </p>
                               </div>
                             </div>
                             <div className="flex justify-between items-center mt-3 ml-7">
@@ -450,7 +302,9 @@ export default function ExpenseList() {
                               <p className="font-medium text-gray-900">{expense.description}</p>
                               <p className="text-xs text-gray-500 mt-1">{formatDate(expense.created_at)}</p>
                             </div>
-                            <p className="text-lg font-semibold text-gray-900 ml-2">{formatCurrency(expense.amount)}</p>
+                            <p className={`text-lg font-semibold ml-2 ${getTransactionTypeStyle(expense.transaction_type).color}`}>
+                              {formatCurrency(expense.amount)}
+                            </p>
                           </div>
                         </div>
                         <div className="flex justify-between items-center mt-3 ml-7">
@@ -531,14 +385,14 @@ export default function ExpenseList() {
                                 {formatDate(expense.created_at)}
                               </td>
                               <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {expense.description}
+                                <span>{expense.description}</span>
                               </td>
                               <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getCategoryColor(expense.category)}`}>
                                   {expense.category}
                                 </span>
                               </td>
-                              <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
+                              <td className={`px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${getTransactionTypeStyle(expense.transaction_type).color}`}>
                                 {formatCurrency(expense.amount)}
                               </td>
                               <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-right space-x-2">
@@ -574,14 +428,14 @@ export default function ExpenseList() {
                             {formatDate(expense.created_at)}
                           </td>
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {expense.description}
+                            <span>{expense.description}</span>
                           </td>
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getCategoryColor(expense.category)}`}>
                               {expense.category}
                             </span>
                           </td>
-                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
+                          <td className={`px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${getTransactionTypeStyle(expense.transaction_type).color}`}>
                             {formatCurrency(expense.amount)}
                           </td>
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-right space-x-2">
@@ -618,56 +472,157 @@ export default function ExpenseList() {
 
       {/* Summary View */}
       {view === 'summary' && (
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
-          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-              Monthly Summary ({new Date().toLocaleString('default', { month: 'long', year: 'numeric' })})
-            </h2>
-          </div>
-          
-          {Object.keys(summary).length === 0 ? (
-            <div className="px-4 sm:px-6 py-8 sm:py-12 text-center text-gray-500">
-              <p>No expenses this month.</p>
+        <div className="space-y-4 sm:space-y-6">
+          {/* First Row - Transaction Type Summary */}
+          <div className="bg-white shadow-md rounded-lg overflow-hidden">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+                Monthly Summary ({new Date().toLocaleString('default', { month: 'long', year: 'numeric' })})
+              </h2>
             </div>
-          ) : (
+            
             <div className="p-4 sm:p-6">
-              <div className="space-y-3 sm:space-y-4">
-                {Object.entries(summary)
-                  .sort(([, a], [, b]) => b - a)
-                  .map(([category, amount]) => {
-                    const percentage = (amount / totalSummary) * 100
-                    return (
-                      <div key={category}>
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="flex items-center">
-                            <span className={`px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold rounded-full ${getCategoryColor(category)}`}>
-                              {category}
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-base sm:text-lg font-semibold text-gray-900">{formatCurrency(amount)}</p>
-                            <p className="text-xs sm:text-sm text-gray-500">{percentage.toFixed(1)}%</p>
-                          </div>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-indigo-600 h-2 rounded-full"
-                            style={{ width: `${percentage}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    )
-                  })}
+              <div className="grid grid-cols-3 gap-3 sm:gap-4">
+                {/* Expenses */}
+                <div className="border border-red-200 rounded-lg p-3 sm:p-4 bg-red-50">
+                  <p className="text-xs sm:text-sm text-gray-600">Expenses</p>
+                  <p className="text-lg sm:text-xl font-bold text-red-600 mt-1">{transactionTotals.expense.count}</p>
+                  <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">{formatCurrency(transactionTotals.expense.total)}</p>
+                </div>
+                
+                {/* Income */}
+                <div className="border border-green-200 rounded-lg p-3 sm:p-4 bg-green-50">
+                  <p className="text-xs sm:text-sm text-gray-600">Income</p>
+                  <p className="text-lg sm:text-xl font-bold text-green-600 mt-1">{transactionTotals.income.count}</p>
+                  <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">{formatCurrency(transactionTotals.income.total)}</p>
+                </div>
+                
+                {/* Savings */}
+                <div className="border border-blue-200 rounded-lg p-3 sm:p-4 bg-blue-50">
+                  <p className="text-xs sm:text-sm text-gray-600">Savings</p>
+                  <p className="text-lg sm:text-xl font-bold text-blue-600 mt-1">{transactionTotals.savings.count}</p>
+                  <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">{formatCurrency(transactionTotals.savings.total)}</p>
+                </div>
               </div>
               
+              {/* Balance */}
               <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
                 <div className="flex justify-between items-center">
-                  <span className="text-base sm:text-lg font-semibold text-gray-900">Total</span>
-                  <span className="text-xl sm:text-2xl font-bold text-gray-900">{formatCurrency(totalSummary)}</span>
+                  <span className="text-base sm:text-lg font-semibold text-gray-900">Balance (Income - Expenses)</span>
+                  <span className={`text-xl sm:text-2xl font-bold ${
+                    (transactionTotals.income.total - transactionTotals.expense.total) >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {formatCurrency(transactionTotals.income.total - transactionTotals.expense.total)}
+                  </span>
                 </div>
               </div>
             </div>
-          )}
+          </div>
+          
+          {/* Second Row - Category Distribution by Transaction Type */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Expenses Categories */}
+            <div className="bg-white shadow-md rounded-lg overflow-hidden">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-red-200 bg-red-50">
+                <h3 className="text-base sm:text-lg font-semibold text-red-900">Expense Categories</h3>
+              </div>
+              <div className="p-4 sm:p-6">
+                {Object.keys(transactionTotals.expense.categories).length === 0 ? (
+                  <p className="text-sm text-gray-500">No expenses this month</p>
+                ) : (
+                  <div className="space-y-3">
+                    {Object.entries(transactionTotals.expense.categories)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([category, amount]) => {
+                        const percentage = (amount / transactionTotals.expense.total) * 100
+                        return (
+                          <div key={category}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs sm:text-sm font-medium text-gray-700 truncate">{category}</span>
+                              <span className="text-xs sm:text-sm font-semibold text-gray-900">{percentage.toFixed(0)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className="bg-red-600 h-1.5 rounded-full"
+                                style={{ width: `${percentage}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Income Categories */}
+            <div className="bg-white shadow-md rounded-lg overflow-hidden">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-green-200 bg-green-50">
+                <h3 className="text-base sm:text-lg font-semibold text-green-900">Income Categories</h3>
+              </div>
+              <div className="p-4 sm:p-6">
+                {Object.keys(transactionTotals.income.categories).length === 0 ? (
+                  <p className="text-sm text-gray-500">No income this month</p>
+                ) : (
+                  <div className="space-y-3">
+                    {Object.entries(transactionTotals.income.categories)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([category, amount]) => {
+                        const percentage = (amount / transactionTotals.income.total) * 100
+                        return (
+                          <div key={category}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs sm:text-sm font-medium text-gray-700 truncate">{category}</span>
+                              <span className="text-xs sm:text-sm font-semibold text-gray-900">{percentage.toFixed(0)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className="bg-green-600 h-1.5 rounded-full"
+                                style={{ width: `${percentage}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Savings Categories */}
+            <div className="bg-white shadow-md rounded-lg overflow-hidden">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-blue-200 bg-blue-50">
+                <h3 className="text-base sm:text-lg font-semibold text-blue-900">Savings Categories</h3>
+              </div>
+              <div className="p-4 sm:p-6">
+                {Object.keys(transactionTotals.savings.categories).length === 0 ? (
+                  <p className="text-sm text-gray-500">No savings this month</p>
+                ) : (
+                  <div className="space-y-3">
+                    {Object.entries(transactionTotals.savings.categories)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([category, amount]) => {
+                        const percentage = (amount / transactionTotals.savings.total) * 100
+                        return (
+                          <div key={category}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs sm:text-sm font-medium text-gray-700 truncate">{category}</span>
+                              <span className="text-xs sm:text-sm font-semibold text-gray-900">{percentage.toFixed(0)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className="bg-blue-600 h-1.5 rounded-full"
+                                style={{ width: `${percentage}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

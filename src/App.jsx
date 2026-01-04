@@ -45,7 +45,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar user={session.user} />
-      <SpendingInsights />
+      {/* <SpendingInsights /> */}
       <ExpenseList />
     </div>
   )

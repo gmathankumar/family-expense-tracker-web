@@ -1,15 +1,5 @@
 import { useState, useEffect } from 'react'
-
-const CATEGORIES = [
-  'Grocery',
-  'Transport',
-  'Food',
-  'Entertainment',
-  'Shopping',
-  'Bills',
-  'Health',
-  'Other'
-]
+import { TRANSACTION_TYPES, TRANSACTION_CATEGORIES, FORM_PLACEHOLDERS } from '../constants'
 
 export default function ExpenseForm({ expense, onSubmit, onCancel }) {
   // Set default date to today
@@ -20,9 +10,10 @@ export default function ExpenseForm({ expense, onSubmit, onCancel }) {
 
   const [formData, setFormData] = useState({
     amount: '',
-    category: 'Grocery',
+    category: TRANSACTION_CATEGORIES.expense[0],
     description: '',
-    date: getTodayDateString()
+    date: getTodayDateString(),
+    transactionType: 'expense'
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -33,10 +24,30 @@ export default function ExpenseForm({ expense, onSubmit, onCancel }) {
         amount: expense.amount,
         category: expense.category,
         description: expense.description,
-        date: new Date(expense.created_at).toISOString().split('T')[0]
+        date: new Date(expense.created_at).toISOString().split('T')[0],
+        transactionType: expense.transaction_type || 'expense'
       })
     }
   }, [expense])
+
+  // Get available categories for current transaction type
+  const getAvailableCategories = () => {
+    return TRANSACTION_CATEGORIES[formData.transactionType] || TRANSACTION_CATEGORIES.expense
+  }
+
+  // Get placeholder and label for current transaction type
+  const getContextInfo = () => {
+    return FORM_PLACEHOLDERS[formData.transactionType] || FORM_PLACEHOLDERS.expense
+  }
+
+  const handleTransactionTypeChange = (newType) => {
+    const categories = TRANSACTION_CATEGORIES[newType]
+    setFormData({
+      ...formData,
+      transactionType: newType,
+      category: categories[0] // Set to first category of new type
+    })
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -76,12 +87,35 @@ export default function ExpenseForm({ expense, onSubmit, onCancel }) {
   return (
     <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
       <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
-        {expense ? 'Edit Expense' : 'Add New Expense'}
+        {expense ? 'Edit' : 'Add New'}
       </h3>
 
       <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
         <div>
-          <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="transactionType" className="block text-sm font-medium text-gray-700 mb-1">
+            Type
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {TRANSACTION_TYPES.map(type => (
+              <button
+                key={type.value}
+                type="button"
+                onClick={() => handleTransactionTypeChange(type.value)}
+                className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  formData.transactionType === type.value
+                    ? `bg-${type.color}-100 text-${type.color}-700 ring-2 ring-${type.color}-500`
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                disabled={loading}
+              >
+                {type.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
             Date
           </label>
           <input
@@ -125,7 +159,7 @@ export default function ExpenseForm({ expense, onSubmit, onCancel }) {
             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
             disabled={loading}
           >
-            {CATEGORIES.map((cat) => (
+            {getAvailableCategories().map((cat) => (
               <option key={cat} value={cat}>
                 {cat}
               </option>
@@ -135,14 +169,14 @@ export default function ExpenseForm({ expense, onSubmit, onCancel }) {
 
         <div>
           <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-            Description
+            {getContextInfo().label}
           </label>
           <input
             type="text"
             id="description"
             required
             className="w-full px-3 py-2 text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="What did you buy?"
+            placeholder={getContextInfo().placeholder}
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             disabled={loading}
@@ -159,9 +193,13 @@ export default function ExpenseForm({ expense, onSubmit, onCancel }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full sm:flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm sm:text-base font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`w-full sm:flex-1 py-2.5 px-4 text-white text-sm sm:text-base font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+              formData.transactionType === 'expense' ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' :
+              formData.transactionType === 'income' ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' :
+              'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+            }`}
           >
-            {loading ? 'Saving...' : (expense ? 'Update' : 'Add Expense')}
+            {loading ? 'Saving...' : 'Submit'}
           </button>
           {onCancel && (
             <button

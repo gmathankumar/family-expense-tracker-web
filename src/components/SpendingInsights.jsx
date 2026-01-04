@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, getCurrentUserRecord } from '../lib/supabase'
 
 export default function SpendingInsights() {
   const [insight, setInsight] = useState('')
@@ -15,13 +15,20 @@ export default function SpendingInsights() {
       setLoading(true)
       setError(null)
 
-      // Get current user's expenses from the last 30 days
+      // Get current user's family record
+      const userRecord = await getCurrentUserRecord()
+      if (!userRecord) {
+        throw new Error('User not found in authorized_users')
+      }
+
+      // Get family's expenses from the last 30 days
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
       const { data: expenses, error: fetchError } = await supabase
         .from('expenses')
         .select('amount, category, created_at, description')
+        .eq('family_id', userRecord.family_id)
         .gte('created_at', thirtyDaysAgo.toISOString())
         .order('created_at', { ascending: false })
 

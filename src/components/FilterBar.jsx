@@ -1,16 +1,7 @@
 import { useState } from 'react'
+import { TRANSACTION_CATEGORIES, FORM_PLACEHOLDERS, TRANSACTION_TYPES } from '../constants'
 
-const CATEGORIES = [
-  'All Categories',
-  'Grocery',
-  'Transport',
-  'Food',
-  'Entertainment',
-  'Shopping',
-  'Bills',
-  'Health',
-  'Other'
-]
+const ALL_CATEGORIES = ['All Categories', ...new Set(Object.values(TRANSACTION_CATEGORIES).flat())]
 
 const QUICK_FILTERS = [
   { label: 'All Time', value: 'all' },
@@ -24,6 +15,27 @@ export default function FilterBar({ onFilterChange, currentFilters }) {
   const [searchTerm, setSearchTerm] = useState(currentFilters.search || '')
   const [selectedCategory, setSelectedCategory] = useState(currentFilters.category || 'All Categories')
   const [quickFilter, setQuickFilter] = useState(currentFilters.dateRange || 'all')
+  const [transactionType, setTransactionType] = useState(currentFilters.transactionType || null)
+
+  // Get categories for the selected transaction type
+  const getAvailableCategories = () => {
+    if (!transactionType) {
+      return ALL_CATEGORIES
+    }
+    return ['All Categories', ...TRANSACTION_CATEGORIES[transactionType]]
+  }
+
+  // Reset category when transaction type changes
+  const handleTransactionTypeChange = (type) => {
+    const newType = transactionType === type ? null : type
+    setTransactionType(newType)
+    setSelectedCategory('All Categories')
+    onFilterChange({ 
+      ...currentFilters, 
+      transactionType: newType,
+      category: null 
+    })
+  }
 
   const handleSearchChange = (e) => {
     const value = e.target.value
@@ -49,10 +61,13 @@ export default function FilterBar({ onFilterChange, currentFilters }) {
     setSearchTerm('')
     setSelectedCategory('All Categories')
     setQuickFilter('all')
-    onFilterChange({ search: '', category: null, dateRange: 'all' })
+    setTransactionType(null)
+    onFilterChange({ search: '', category: null, dateRange: 'all', transactionType: null })
   }
 
-  const hasActiveFilters = searchTerm || selectedCategory !== 'All Categories' || quickFilter !== 'all'
+  const hasActiveFilters = searchTerm || selectedCategory !== 'All Categories' || quickFilter !== 'all' || transactionType
+
+  const availableCategories = getAvailableCategories()
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-4 sm:mb-6">
@@ -86,6 +101,44 @@ export default function FilterBar({ onFilterChange, currentFilters }) {
         </div>
       </div>
 
+      {/* Transaction Type Filter */}
+      <div className="mb-3 sm:mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Transaction Type
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => handleTransactionTypeChange(null)}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              transactionType === null
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            All Types
+          </button>
+          {TRANSACTION_TYPES.map((type) => {
+            const colorMap = {
+              red: { selected: 'bg-red-600 text-white', unselected: 'bg-red-100 text-red-700 hover:bg-red-200' },
+              green: { selected: 'bg-green-600 text-white', unselected: 'bg-green-100 text-green-700 hover:bg-green-200' },
+              blue: { selected: 'bg-blue-600 text-white', unselected: 'bg-blue-100 text-blue-700 hover:bg-blue-200' }
+            }
+            const colors = colorMap[type.color]
+            return (
+            <button
+              key={type.value}
+              onClick={() => handleTransactionTypeChange(type.value)}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                transactionType === type.value ? colors.selected : colors.unselected
+              }`}
+            >
+              {type.label}
+            </button>
+          )})
+          }
+        </div>
+      </div>
+
       {/* Category Filter */}
       <div className="mb-3 sm:mb-4">
         <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
@@ -97,7 +150,7 @@ export default function FilterBar({ onFilterChange, currentFilters }) {
           onChange={handleCategoryChange}
           className="w-full px-3 py-2 text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          {CATEGORIES.map((cat) => (
+          {availableCategories.map((cat) => (
             <option key={cat} value={cat}>
               {cat}
             </option>

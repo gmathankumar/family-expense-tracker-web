@@ -16,6 +16,7 @@ A modern, mobile-friendly expense tracking web application built with React, Vit
 - ✨ Create, read, update, and delete expenses
 - ✨ Add custom dates to expenses with date picker
 - ✨ Real-time expense synchronization
+- 👨‍👩‍👧‍👦 **Family-based tracking** - View and manage expenses shared with your entire family
 - Support for 8 categories: Grocery, Transport, Food, Entertainment, Shopping, Bills, Health, Other
 
 **Advanced Filtering**
@@ -163,9 +164,22 @@ If using the Telegram bot for expense tracking:
 
 ## Usage Guide
 
+### Family Expense Tracking 👨‍👩‍👧‍👦
+This app uses a **family-based model** where:
+- All users in the same family can view and manage **all family expenses**
+- When you create an expense, it's automatically shared with your family members
+- Any family member can edit or delete any family expense
+- AI insights analyze the **entire family's spending patterns** from the last 30 days
+- Monthly summaries show total family spending by category
+
+**How it works:**
+- Each user belongs to a family (via `family_id` in `authorized_users`)
+- All expenses are linked to a family (via `family_id` in `expenses`)
+- The app filters all data by your family ID, showing shared family expenses
+
 ### Spending Insights (AI-Powered)
 - **Automatic Analysis:** Insights appear at the top of the dashboard below the navbar
-- **What it analyzes:** Last 30 days of spending patterns, categories, and trends
+- **What it analyzes:** Last 30 days of family spending patterns, categories, and trends
 - **Refresh:** Click the refresh icon to get a new insight
 - **Mobile & Desktop:** Fully responsive, works on all devices
 
@@ -195,17 +209,41 @@ If using the Telegram bot for expense tracking:
 
 ## API Documentation
 
+### Database Schema
+
+**Families Table:**
+- `id` - UUID primary key
+- `name` - Family name
+- `created_at`, `updated_at` - Timestamps
+
+**Authorized Users Table:**
+- `id` - UUID primary key
+- `telegram_chat_id` - Telegram chat ID (unique)
+- `name` - User name
+- `auth_user_id` - Link to Supabase Auth user
+- `family_id` - Foreign key to families table (required)
+
+**Expenses Table:**
+- `id` - UUID primary key
+- `amount` - Expense amount
+- `category` - Category name
+- `description` - Expense description
+- `created_at` - Timestamp
+- `user_id` - Foreign key to authorized_users (who created it)
+- `family_id` - Foreign key to families table (required)
+- `transaction_type` - Type: 'expense', 'income', or 'savings'
+
 ### Database Functions (supabase.js)
 
-- `getCurrentUserRecord()` - Get current user's database record
+- `getCurrentUserRecord()` - Get current user's database record with family_id
 - `getDateRange(filter)` - Parse quick date filters
-- `getUserExpenses(page, pageSize, filters)` - Fetch paginated expenses with filters
-- `getMonthlySummary(year, month)` - Get monthly breakdown by category
-- `createExpense(expenseData)` - Add new expense
-- `updateExpense(expenseId, updates)` - Edit existing expense
-- `deleteExpense(expenseId)` - Remove expense
+- `getUserExpenses(page, pageSize, filters)` - Fetch paginated family expenses (filtered by family_id)
+- `getMonthlySummary(year, month)` - Get monthly breakdown by category for the family
+- `createExpense(expenseData)` - Add new expense with user_id and family_id
+- `updateExpense(expenseId, updates)` - Edit family expense (validates family_id)
+- `deleteExpense(expenseId)` - Remove family expense (validates family_id)
 
-All functions include RLS protection and user authorization.
+All functions filter by family_id and include RLS protection.
 
 ## Troubleshooting
 
