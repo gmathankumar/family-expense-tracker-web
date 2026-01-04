@@ -3,6 +3,7 @@ import { supabase } from './lib/supabase'
 import Auth from './components/Auth'
 import Navbar from './components/Navbar'
 import ExpenseList from './components/ExpenseList'
+import SpendingInsights from './components/SpendingInsights'
 
 function App() {
   const [session, setSession] = useState(null)
@@ -44,7 +45,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar user={session.user} />
-      {/* <SpendingInsights /> */}
+      <SpendingInsights />
       <ExpenseList />
     </div>
   )
