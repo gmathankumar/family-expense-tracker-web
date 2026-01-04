@@ -41,6 +41,14 @@ A modern, mobile-friendly expense tracking web application built with React, Vit
 - 📊 Monthly summary by category with percentages
 - Category-based color coding
 
+**AI-Powered Insights**
+- 🤖 Personalized spending pattern analysis using OpenRouter AI
+- Displays at the top of dashboard below navbar
+- Analyzes last 30 days of spending
+- Actionable recommendations
+- One-click refresh to get new insights
+- Works on both mobile and desktop
+
 **Responsive Design**
 - 📱 Mobile-optimized card view with full functionality
 - 💻 Desktop table view with detailed columns
@@ -58,6 +66,7 @@ web-app/
 │   │   ├── SignIn.jsx              # Login form
 │   │   ├── SignUp.jsx              # Registration form
 │   │   ├── Navbar.jsx              # Navigation bar with user info
+│   │   ├── SpendingInsights.jsx    # AI-powered spending analysis
 │   │   ├── ExpenseList.jsx         # Main expense management UI
 │   │   ├── ExpenseForm.jsx         # Create/edit expense form
 │   │   ├── FilterBar.jsx           # Search and filter controls
@@ -95,9 +104,12 @@ Add to `.env`:
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your_publishable_key
+VITE_OPENROUTER_API_KEY=your_openrouter_api_key
 ```
 
-Get these from: Supabase Dashboard → Project Settings → API
+Get Supabase keys from: Supabase Dashboard → Project Settings → API
+
+Get OpenRouter API key from: https://openrouter.ai/keys (free tier available)
 
 ### Step 3: Configure Supabase
 
@@ -150,6 +162,12 @@ If using the Telegram bot for expense tracking:
    ```
 
 ## Usage Guide
+
+### Spending Insights (AI-Powered)
+- **Automatic Analysis:** Insights appear at the top of the dashboard below the navbar
+- **What it analyzes:** Last 30 days of spending patterns, categories, and trends
+- **Refresh:** Click the refresh icon to get a new insight
+- **Mobile & Desktop:** Fully responsive, works on all devices
 
 ### Adding Expenses
 1. Click **+ Add Expense** button
