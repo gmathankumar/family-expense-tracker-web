@@ -35,8 +35,12 @@ export function useExpenseOperations(onMutationSuccess) {
     }
   }
 
-  const handleUpdateExpense = async (expenseId, expenseData) => {
+  const handleUpdateExpense = async (expenseData) => {
     try {
+      const expenseId = editingExpense?.id
+      if (!expenseId) {
+        throw new Error('No expense selected for editing')
+      }
       await updateExpense(expenseId, expenseData)
       setEditingExpense(null)
       setShowForm(false)
@@ -61,15 +65,15 @@ export function useExpenseOperations(onMutationSuccess) {
     }
   }
 
-  const handleBulkDelete = async (selectedIds) => {
-    if (selectedIds.size === 0) return
+  const handleBulkDelete = async () => {
+    if (selectedExpenses.size === 0) return
 
-    if (!confirm(`Delete ${selectedIds.size} selected expense(s)?`)) {
+    if (!confirm(`Delete ${selectedExpenses.size} selected expense(s)?`)) {
       return
     }
 
     try {
-      for (const expenseId of selectedIds) {
+      for (const expenseId of selectedExpenses) {
         await deleteExpense(expenseId)
       }
       setSelectedExpenses(new Set())

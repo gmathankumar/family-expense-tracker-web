@@ -19,16 +19,25 @@ export default function ExpenseList() {
 
   // Initialize data on mount
   useEffect(() => {
-    loadExpenses()
-    loadMonthlyTransactionTotals()
+    async function initializeData() {
+      const result = await loadExpenses()
+      await loadMonthlyTransactionTotals(result)
+    }
+    initializeData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Handle mutations that affect data
   async function handleMutationSuccess() {
     const newPage = 1
-    await loadExpenses(newPage, filters)
-    await loadMonthlyTransactionTotals()
+    const result = await loadExpenses(newPage, filters)
+    await loadMonthlyTransactionTotals(result)
+  }
+
+  // Wrapper for filter changes to update monthly totals
+  async function handleFilterChangeWithUpdate(newFilters) {
+    const result = await handleFilterChange(newFilters)
+    await loadMonthlyTransactionTotals(result)
   }
 
   const formatCurrency = (amount) => {
@@ -117,7 +126,7 @@ export default function ExpenseList() {
       {/* Filter Bar */}
       {view === 'list' && (
         <FilterBar 
-          onFilterChange={handleFilterChange}
+          onFilterChange={handleFilterChangeWithUpdate}
           currentFilters={filters}
         />
       )}
@@ -149,7 +158,7 @@ export default function ExpenseList() {
                   <input
                     type="checkbox"
                     checked={selectedExpenses.size === expenses.length && expenses.length > 0}
-                    onChange={handleSelectAll}
+                    onChange={() => handleSelectAll(expenses)}
                     className="rounded"
                   />
                   <span className="text-xs sm:text-sm">Select All</span>
@@ -341,7 +350,7 @@ export default function ExpenseList() {
                         <input
                           type="checkbox"
                           checked={selectedExpenses.size === expenses.length && expenses.length > 0}
-                          onChange={handleSelectAll}
+                          onChange={() => handleSelectAll(expenses)}
                           className="rounded"
                         />
                       </th>

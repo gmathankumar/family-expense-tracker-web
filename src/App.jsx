@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
 import Auth from './components/Auth'
 import Navbar from './components/Navbar'
-import SpendingInsights from './components/SpendingInsights'
 import ExpenseList from './components/ExpenseList'
 
 function App() {

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { getMonthlyTransactionTypeTotals } from '../lib/supabase'
 
 export function useTransactionTotals() {
   const [transactionTotals, setTransactionTotals] = useState({
@@ -8,11 +7,12 @@ export function useTransactionTotals() {
     savings: { count: 0, total: 0, categories: {} }
   })
 
-  const loadMonthlyTransactionTotals = async () => {
+  const loadMonthlyTransactionTotals = async (expenseData = null) => {
     try {
-      const now = new Date()
-      const monthlyTotals = await getMonthlyTransactionTypeTotals(now.getFullYear(), now.getMonth() + 1)
-      setTransactionTotals(monthlyTotals)
+      // Use monthlyBreakdown from expenseData
+      if (expenseData?.monthlyBreakdown) {
+        setTransactionTotals(expenseData.monthlyBreakdown)
+      }
     } catch (err) {
       console.error('Error loading monthly transaction totals:', err)
       throw err

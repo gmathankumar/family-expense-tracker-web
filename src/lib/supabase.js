@@ -82,10 +82,10 @@ export async function getUserExpenses(page = 1, pageSize = 10, filters = {}) {
     .select('*', { count: 'exact', head: true })
     .eq('family_id', userRecord.family_id)
 
-  // Build query for sum of amounts
+  // Build query for sum of amounts (with category and transaction_type for breakdown)
   let sumQuery = supabase
     .from('expenses')
-    .select('amount')
+    .select('amount, category, transaction_type, created_at')
     .eq('family_id', userRecord.family_id)
 
   // Build query for data
@@ -135,7 +135,37 @@ export async function getUserExpenses(page = 1, pageSize = 10, filters = {}) {
   if (error) throw error
 
   // Calculate total amount from all filtered expenses
-  const totalAmount = amountData.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0)
+  const totalAmount = amountData.reduce((sum, exp) => sum + Number.parseFloat(exp.amount || 0), 0)
+
+  // Calculate monthly breakdown by transaction type from current month's data
+  const now = new Date()
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+  
+  const monthlyBreakdown = {
+    expense: { total: 0, count: 0, categories: {} },
+    income: { total: 0, count: 0, categories: {} },
+    savings: { total: 0, count: 0, categories: {} }
+  }
+  
+  // Calculate breakdown from amountData (all filtered records)
+  amountData.forEach(item => {
+    const itemDate = new Date(item.created_at)
+    // Only include items from current month for monthly breakdown
+    if (itemDate >= currentMonthStart && itemDate <= currentMonthEnd) {
+      const type = item.transaction_type || 'expense'
+      const amount = Number.parseFloat(item.amount || 0)
+      const category = item.category
+      
+      monthlyBreakdown[type].total += amount
+      monthlyBreakdown[type].count += 1
+      
+      if (!monthlyBreakdown[type].categories[category]) {
+        monthlyBreakdown[type].categories[category] = 0
+      }
+      monthlyBreakdown[type].categories[category] += amount
+    }
+  })
 
   // Apply search filter client-side
   let filteredData = data
@@ -151,6 +181,7 @@ export async function getUserExpenses(page = 1, pageSize = 10, filters = {}) {
     data: filteredData,
     total: count,
     totalAmount: totalAmount,
+    monthlyBreakdown: monthlyBreakdown,
     page,
     pageSize,
     totalPages: Math.ceil(count / pageSize)
@@ -188,134 +219,7 @@ export async function getMonthlyTransactionTypeTotals(year, month) {
 
   data.forEach(item => {
     const type = item.transaction_type || 'expense'
-    const amount = parseFloat(item.amount)
-    
-    summary[type].total += amount
-    summary[type].count += 1
-    
-    if (!summary[type].categories[item.category]) {
-      summary[type].categories[item.category] = 0
-    }
-    summary[type].categories[item.category] += amount
-  })
-
-  return summary
-}
-
-export async function getTransactionTypeTotals(filters = {}) {
-  const userRecord = await getCurrentUserRecord()
-  
-  if (!userRecord) {
-    throw new Error('User not found in authorized_users')
-  }
-
-  let query = supabase
-    .from('expenses')
-    .select('transaction_type, amount, category')
-    .eq('family_id', userRecord.family_id)
-
-  // Apply date range filter
-  if (filters.dateRange && filters.dateRange !== 'all') {
-    const dateRange = getDateRange(filters.dateRange)
-    if (dateRange) {
-      query = query.gte('created_at', dateRange.start).lte('created_at', dateRange.end)
-    }
-  }
-
-  // Apply category filter
-  if (filters.category) {
-    query = query.eq('category', filters.category)
-  }
-
-  const { data, error } = await query
-
-  if (error) throw error
-
-  // Group by transaction type and category
-  const totals = {
-    expense: { count: 0, total: 0, categories: {} },
-    income: { count: 0, total: 0, categories: {} },
-    savings: { count: 0, total: 0, categories: {} }
-  }
-
-  data.forEach(item => {
-    const type = item.transaction_type || 'expense'
-    const amount = Number.parseFloat(item.amount || 0)
-    if (totals[type]) {
-      totals[type].count++
-      totals[type].total += amount
-      
-      if (!totals[type].categories[item.category]) {
-        totals[type].categories[item.category] = 0
-      }
-      totals[type].categories[item.category] += amount
-    }
-  })
-
-  return totals
-}
-
-// Helper function to get monthly summary
-export async function getMonthlySummary(year, month) {
-  const userRecord = await getCurrentUserRecord()
-  
-  if (!userRecord) {
-    throw new Error('User not found in authorized_users')
-  }
-
-  const startDate = new Date(year, month - 1, 1)
-  const endDate = new Date(year, month, 0, 23, 59, 59)
-
-  const { data, error } = await supabase
-    .from('expenses')
-    .select('category, amount, transaction_type')
-    .eq('family_id', userRecord.family_id)
-    .gte('created_at', startDate.toISOString())
-    .lte('created_at', endDate.toISOString())
-
-  if (error) throw error
-
-  // Group by category
-  const summary = data.reduce((acc, expense) => {
-    if (!acc[expense.category]) {
-      acc[expense.category] = 0
-    }
-    acc[expense.category] += parseFloat(expense.amount)
-    return acc
-  }, {})
-
-  return summary
-}
-
-export async function getMonthlySummaryByType(year, month) {
-  const userRecord = await getCurrentUserRecord()
-  
-  if (!userRecord) {
-    throw new Error('User not found in authorized_users')
-  }
-
-  const startDate = new Date(year, month - 1, 1)
-  const endDate = new Date(year, month, 0, 23, 59, 59)
-
-  const { data, error } = await supabase
-    .from('expenses')
-    .select('category, amount, transaction_type')
-    .eq('family_id', userRecord.family_id)
-    .gte('created_at', startDate.toISOString())
-    .lte('created_at', endDate.toISOString())
-
-  if (error) throw error
-
-  // Group by transaction type and category
-  const summary = {
-    expense: { total: 0, count: 0, categories: {} },
-    income: { total: 0, count: 0, categories: {} },
-    savings: { total: 0, count: 0, categories: {} }
-  }
-
-  data.forEach(item => {
-    const type = item.transaction_type || 'expense'
-    const amount = parseFloat(item.amount)
+    const amount = Number.parseFloat(item.amount)
     
     summary[type].total += amount
     summary[type].count += 1
@@ -369,6 +273,12 @@ export async function updateExpense(expenseId, updates) {
   if (updates.date) {
     processedUpdates.created_at = new Date(updates.date).toISOString()
     delete processedUpdates.date
+  }
+  
+  // Map camelCase to snake_case for database columns
+  if (updates.transactionType) {
+    processedUpdates.transaction_type = updates.transactionType
+    delete processedUpdates.transactionType
   }
 
   const { data, error } = await supabase

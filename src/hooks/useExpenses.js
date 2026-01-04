@@ -26,6 +26,7 @@ export function useExpenses() {
       setTotalExpenses(result.total)
       setTotalAmount(result.totalAmount)
       setCurrentPage(page)
+      return result // Return full result for passing to loadMonthlyTransactionTotals
     } catch (err) {
       console.error('Error loading expenses:', err)
       throw err
