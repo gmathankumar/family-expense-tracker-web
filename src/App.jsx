@@ -4,6 +4,7 @@ import Auth from './components/Auth'
 import Navbar from './components/Navbar'
 import ExpenseList from './components/ExpenseList'
 import SpendingInsights from './components/SpendingInsights'
+import { ExpenseProvider } from './context/ExpenseContext'
 
 function App() {
   const [session, setSession] = useState(null)
@@ -43,11 +44,13 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar user={session.user} />
-      <SpendingInsights />
-      <ExpenseList />
-    </div>
+    <ExpenseProvider>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar user={session.user} />
+        <SpendingInsights />
+        <ExpenseList />
+      </div>
+    </ExpenseProvider>
   )
 }
 

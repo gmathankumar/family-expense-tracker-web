@@ -1,43 +1,127 @@
-import { useEffect } from 'react'
-import { useExpenses, useTransactionTotals, useExpenseOperations, useExpenseUI } from '../hooks'
+import { useState } from 'react'
+import { useExpenseContext, useExpenseUI } from '../hooks'
 import ExpenseForm from './ExpenseForm'
 import Pagination from './Pagination'
 import FilterBar from './FilterBar'
 
 export default function ExpenseList() {
-  // Custom hooks
-  const expensesHook = useExpenses()
-  const transactionHook = useTransactionTotals()
-  const operationsHook = useExpenseOperations(handleMutationSuccess)
+  // Get state and actions from context
+  const {
+    expenses,
+    currentPage,
+    totalPages,
+    totalExpenses,
+    totalAmount,
+    filters,
+    loading,
+    error,
+    monthlyBreakdown,
+    handleSetFilters,
+    handleSetPage,
+    handleAddExpense,
+    handleUpdateExpense,
+    handleDeleteExpense,
+    handleBulkDelete
+  } = useExpenseContext()
+
+  // Local UI state
   const uiHook = useExpenseUI()
+  const { view, groupBy, setView, setGroupBy, groupExpenses } = uiHook
+  
+  const [editingExpense, setEditingExpense] = useState(null)
+  const [selectedExpenses, setSelectedExpenses] = useState(new Set())
+  const [showForm, setShowForm] = useState(false)
 
-  // Destructure for cleaner access
-  const { expenses, currentPage, totalPages, totalExpenses, totalAmount, filters, loading, handleFilterChange, handlePageChange, loadExpenses } = expensesHook
-  const { transactionTotals, loadMonthlyTransactionTotals, getThisMonthTotal } = transactionHook
-  const { editingExpense, selectedExpenses, showForm, handleSelectExpense, handleSelectAll, handleAddExpense, handleUpdateExpense, handleDeleteExpense, handleBulkDelete, handleEdit, handleCancelForm, setShowForm, setEditingExpense } = operationsHook
-  const { view, error, groupBy, setView, setGroupBy, groupExpenses } = uiHook
-
-  // Initialize data on mount
-  useEffect(() => {
-    async function initializeData() {
-      const result = await loadExpenses()
-      await loadMonthlyTransactionTotals(result)
+  // Handlers
+  const handleSelectExpense = (expenseId) => {
+    const newSelected = new Set(selectedExpenses)
+    if (newSelected.has(expenseId)) {
+      newSelected.delete(expenseId)
+    } else {
+      newSelected.add(expenseId)
     }
-    initializeData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Handle mutations that affect data
-  async function handleMutationSuccess() {
-    const newPage = 1
-    const result = await loadExpenses(newPage, filters)
-    await loadMonthlyTransactionTotals(result)
+    setSelectedExpenses(newSelected)
   }
 
-  // Wrapper for filter changes to update monthly totals
-  async function handleFilterChangeWithUpdate(newFilters) {
-    const result = await handleFilterChange(newFilters)
-    await loadMonthlyTransactionTotals(result)
+  const handleSelectAll = (expensesList) => {
+    if (selectedExpenses.size === expensesList.length && expensesList.length > 0) {
+      setSelectedExpenses(new Set())
+    } else {
+      setSelectedExpenses(new Set(expensesList.map(e => e.id)))
+    }
+  }
+
+  const handleAdd = async (expenseData) => {
+    try {
+      await handleAddExpense(expenseData)
+      setShowForm(false)
+    } catch (err) {
+      console.error('Error creating expense:', err)
+      throw err
+    }
+  }
+
+  const handleUpdate = async (expenseData) => {
+    try {
+      const expenseId = editingExpense?.id
+      if (!expenseId) {
+        throw new Error('No expense selected for editing')
+      }
+      await handleUpdateExpense(expenseId, expenseData)
+      setEditingExpense(null)
+      setShowForm(false)
+    } catch (err) {
+      console.error('Error updating expense:', err)
+      throw err
+    }
+  }
+
+  const handleDelete = async (expenseId) => {
+    if (!confirm('Are you sure you want to delete this expense?')) {
+      return
+    }
+
+    try {
+      await handleDeleteExpense(expenseId)
+    } catch (err) {
+      console.error('Error deleting expense:', err)
+      throw err
+    }
+  }
+
+  const handleBulkDeleteClick = async () => {
+    if (selectedExpenses.size === 0) return
+
+    if (!confirm(`Delete ${selectedExpenses.size} selected expense(s)?`)) {
+      return
+    }
+
+    try {
+      await handleBulkDelete(Array.from(selectedExpenses))
+      setSelectedExpenses(new Set())
+    } catch (err) {
+      console.error('Error bulk deleting expenses:', err)
+      throw err
+    }
+  }
+
+  const handleEdit = (expense) => {
+    setEditingExpense(expense)
+    setShowForm(true)
+  }
+
+  const handleCancelForm = () => {
+    setShowForm(false)
+    setEditingExpense(null)
+  }
+
+  const getThisMonthTotal = (transactionType = null) => {
+    if (!transactionType) {
+      // If no type selected, sum all types
+      return monthlyBreakdown.expense.total + monthlyBreakdown.income.total + monthlyBreakdown.savings.total
+    }
+    // If type selected, show that type's total
+    return monthlyBreakdown[transactionType]?.total || 0
   }
 
   const formatCurrency = (amount) => {
@@ -103,6 +187,8 @@ export default function ExpenseList() {
     )
   }
 
+  // Calculate total amount for filtered expenses
+  const filteredTotalAmount = totalAmount.expense.total + totalAmount.income.total + totalAmount.savings.total
   const totalSummary = getThisMonthTotal(filters.transactionType)
 
   return (
@@ -115,7 +201,7 @@ export default function ExpenseList() {
         </div>
         <div className="bg-white rounded-lg shadow p-2 sm:p-5">
           <p className="text-xs sm:text-sm text-gray-600 line-clamp-1">Total Amount</p>
-          <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalAmount)}</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">{formatCurrency(filteredTotalAmount)}</p>
         </div>
         <div className="bg-white rounded-lg shadow p-2 sm:p-5">
           <p className="text-xs sm:text-sm text-gray-600 line-clamp-1">This Month</p>
@@ -126,7 +212,7 @@ export default function ExpenseList() {
       {/* Filter Bar */}
       {view === 'list' && (
         <FilterBar 
-          onFilterChange={handleFilterChangeWithUpdate}
+          onFilterChange={handleSetFilters}
           currentFilters={filters}
         />
       )}
@@ -171,7 +257,7 @@ export default function ExpenseList() {
                     {selectedExpenses.size} selected
                   </span>
                   <button
-                    onClick={handleBulkDelete}
+                    onClick={handleBulkDeleteClick}
                     className="px-3 py-1.5 sm:py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
                   >
                     Delete Selected
@@ -223,7 +309,7 @@ export default function ExpenseList() {
         <div className="mb-4 sm:mb-6">
           <ExpenseForm
             expense={editingExpense}
-            onSubmit={editingExpense ? handleUpdateExpense : handleAddExpense}
+            onSubmit={editingExpense ? handleUpdate : handleAdd}
             onCancel={handleCancelForm}
           />
         </div>
@@ -283,7 +369,7 @@ export default function ExpenseList() {
                                   Edit
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteExpense(expense.id)}
+                                  onClick={() => handleDelete(expense.id)}
                                   className="text-sm text-red-600 hover:text-red-900 font-medium"
                                 >
                                   Delete
@@ -328,7 +414,7 @@ export default function ExpenseList() {
                               Edit
                             </button>
                             <button
-                              onClick={() => handleDeleteExpense(expense.id)}
+                              onClick={() => handleDelete(expense.id)}
                               className="text-sm text-red-600 hover:text-red-900 font-medium"
                             >
                               Delete
@@ -412,7 +498,7 @@ export default function ExpenseList() {
                                   Edit
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteExpense(expense.id)}
+                                  onClick={() => handleDelete(expense.id)}
                                   className="text-red-600 hover:text-red-900 font-medium"
                                 >
                                   Delete
@@ -455,7 +541,7 @@ export default function ExpenseList() {
                               Edit
                             </button>
                             <button
-                              onClick={() => handleDeleteExpense(expense.id)}
+                              onClick={() => handleDelete(expense.id)}
                               className="text-red-600 hover:text-red-900 font-medium"
                             >
                               Delete
@@ -472,7 +558,7 @@ export default function ExpenseList() {
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
-                onPageChange={handlePageChange}
+                onPageChange={handleSetPage}
               />
             </>
           )}
@@ -495,22 +581,22 @@ export default function ExpenseList() {
                 {/* Expenses */}
                 <div className="border border-red-200 rounded-lg p-3 sm:p-4 bg-red-50">
                   <p className="text-xs sm:text-sm text-gray-600">Expenses</p>
-                  <p className="text-lg sm:text-xl font-bold text-red-600 mt-1">{transactionTotals.expense.count}</p>
-                  <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">{formatCurrency(transactionTotals.expense.total)}</p>
+                  <p className="text-lg sm:text-xl font-bold text-red-600 mt-1">{monthlyBreakdown.expense.count}</p>
+                  <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">{formatCurrency(monthlyBreakdown.expense.total)}</p>
                 </div>
                 
                 {/* Income */}
                 <div className="border border-green-200 rounded-lg p-3 sm:p-4 bg-green-50">
                   <p className="text-xs sm:text-sm text-gray-600">Income</p>
-                  <p className="text-lg sm:text-xl font-bold text-green-600 mt-1">{transactionTotals.income.count}</p>
-                  <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">{formatCurrency(transactionTotals.income.total)}</p>
+                  <p className="text-lg sm:text-xl font-bold text-green-600 mt-1">{monthlyBreakdown.income.count}</p>
+                  <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">{formatCurrency(monthlyBreakdown.income.total)}</p>
                 </div>
                 
                 {/* Savings */}
                 <div className="border border-blue-200 rounded-lg p-3 sm:p-4 bg-blue-50">
                   <p className="text-xs sm:text-sm text-gray-600">Savings</p>
-                  <p className="text-lg sm:text-xl font-bold text-blue-600 mt-1">{transactionTotals.savings.count}</p>
-                  <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">{formatCurrency(transactionTotals.savings.total)}</p>
+                  <p className="text-lg sm:text-xl font-bold text-blue-600 mt-1">{monthlyBreakdown.savings.count}</p>
+                  <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">{formatCurrency(monthlyBreakdown.savings.total)}</p>
                 </div>
               </div>
               
@@ -519,9 +605,9 @@ export default function ExpenseList() {
                 <div className="flex justify-between items-center">
                   <span className="text-base sm:text-lg font-semibold text-gray-900">Balance (Income - Expenses)</span>
                   <span className={`text-xl sm:text-2xl font-bold ${
-                    (transactionTotals.income.total - transactionTotals.expense.total) >= 0 ? 'text-green-600' : 'text-red-600'
+                    (monthlyBreakdown.income.total - monthlyBreakdown.expense.total) >= 0 ? 'text-green-600' : 'text-red-600'
                   }`}>
-                    {formatCurrency(transactionTotals.income.total - transactionTotals.expense.total)}
+                    {formatCurrency(monthlyBreakdown.income.total - monthlyBreakdown.expense.total)}
                   </span>
                 </div>
               </div>
@@ -536,14 +622,14 @@ export default function ExpenseList() {
                 <h3 className="text-base sm:text-lg font-semibold text-red-900">Expense Categories</h3>
               </div>
               <div className="p-4 sm:p-6">
-                {Object.keys(transactionTotals.expense.categories).length === 0 ? (
+                {Object.keys(monthlyBreakdown.expense.categories).length === 0 ? (
                   <p className="text-sm text-gray-500">No expenses this month</p>
                 ) : (
                   <div className="space-y-3">
-                    {Object.entries(transactionTotals.expense.categories)
+                    {Object.entries(monthlyBreakdown.expense.categories)
                       .sort(([, a], [, b]) => b - a)
                       .map(([category, amount]) => {
-                        const percentage = (amount / transactionTotals.expense.total) * 100
+                        const percentage = (amount / monthlyBreakdown.expense.total) * 100
                         return (
                           <div key={category}>
                             <div className="flex justify-between items-center mb-1">
@@ -570,14 +656,14 @@ export default function ExpenseList() {
                 <h3 className="text-base sm:text-lg font-semibold text-green-900">Income Categories</h3>
               </div>
               <div className="p-4 sm:p-6">
-                {Object.keys(transactionTotals.income.categories).length === 0 ? (
+                {Object.keys(monthlyBreakdown.income.categories).length === 0 ? (
                   <p className="text-sm text-gray-500">No income this month</p>
                 ) : (
                   <div className="space-y-3">
-                    {Object.entries(transactionTotals.income.categories)
+                    {Object.entries(monthlyBreakdown.income.categories)
                       .sort(([, a], [, b]) => b - a)
                       .map(([category, amount]) => {
-                        const percentage = (amount / transactionTotals.income.total) * 100
+                        const percentage = (amount / monthlyBreakdown.income.total) * 100
                         return (
                           <div key={category}>
                             <div className="flex justify-between items-center mb-1">
@@ -604,14 +690,14 @@ export default function ExpenseList() {
                 <h3 className="text-base sm:text-lg font-semibold text-blue-900">Savings Categories</h3>
               </div>
               <div className="p-4 sm:p-6">
-                {Object.keys(transactionTotals.savings.categories).length === 0 ? (
+                {Object.keys(monthlyBreakdown.savings.categories).length === 0 ? (
                   <p className="text-sm text-gray-500">No savings this month</p>
                 ) : (
                   <div className="space-y-3">
-                    {Object.entries(transactionTotals.savings.categories)
+                    {Object.entries(monthlyBreakdown.savings.categories)
                       .sort(([, a], [, b]) => b - a)
                       .map(([category, amount]) => {
-                        const percentage = (amount / transactionTotals.savings.total) * 100
+                        const percentage = (amount / monthlyBreakdown.savings.total) * 100
                         return (
                           <div key={category}>
                             <div className="flex justify-between items-center mb-1">

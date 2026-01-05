@@ -1,31 +1,37 @@
 // Transaction type aware categories
 export const TRANSACTION_CATEGORIES = {
   expense: [
-    'Grocery',
-    'Transport',
-    'Food',
-    'Entertainment',
-    'Shopping',
     'Bills',
+    'Car',
+    'Food',
+    'Gifts',
+    'Government',
+    'Grocery',
     'Health',
-    'Other'
+    'Household',
+    'Leisure',
+    'Lifestyle',
+    'Others',
+    'Pranav',
+    'Purchases',
+    'Rent',
+    'Transport'
   ],
   income: [
+    'Business',
+    'Car Park',
+    'Carpooling',
+    'Cashback',
+    'Freelancing',
+    'Gifts',
+    'Interest',
+    'Others',
     'Salary',
-    'Freelance',
-    'Investment',
-    'Bonus',
-    'Gift',
-    'Refund',
-    'Other'
+    'Tax',
+    'Trading'
   ],
   savings: [
-    'Emergency Fund',
-    'Vacation',
-    'Education',
-    'Home',
-    'Car',
-    'Retirement',
+    'Investment',
     'Other'
   ]
 }

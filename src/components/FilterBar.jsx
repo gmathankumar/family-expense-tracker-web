@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TRANSACTION_CATEGORIES, FORM_PLACEHOLDERS, TRANSACTION_TYPES } from '../constants'
+import { TRANSACTION_CATEGORIES, TRANSACTION_TYPES } from '../constants'
 
 const ALL_CATEGORIES = ['All Categories', ...new Set(Object.values(TRANSACTION_CATEGORIES).flat())]
 
